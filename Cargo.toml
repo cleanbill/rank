@@ -1,0 +1,11 @@
+[package]
+name = "rank"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# ascii_converter = "0.3.0"
+# lopdf = { version = "0.32.0", features = ["pom", "pom_parser"] }
+# pdf = "0.9.0"
