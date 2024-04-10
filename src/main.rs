@@ -17,6 +17,7 @@ fn command_line(pdf_path: &str) -> Result<Vec<String>, Box<dyn Error>> {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 struct Record {
     id: i32,
     filename: String,
@@ -24,6 +25,7 @@ struct Record {
     description: String,
     addition: f64, // Use a suitable type for monetary values
     deduct: f64,
+    org: String,
 }
 
 fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
@@ -39,16 +41,21 @@ fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
         }
         let short = line.len() < 60;
         if found_forward && !found_closing && !short {
+            println!(
+                "4678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+            );
+            println!(
+                "     6         7         8         9         0         1         2         3         4         5         6         7         8         9"
+            );
+            println!("{}.", &line[55..]);
             let date = &line[55..70].trim();
             let item = &line[70..100].trim();
-            let deduct_string = (
-                if line.len() > 131 {
-                    &line[110..131]
-                } else {
-                    &line[110..]
-                }
-            ).trim();
-            let addition_string = (if line.len() > 131 { &line[131..] } else { "" }).trim();
+            let deduct_string = (if line.len() > 131 { &line[120..130] } else { &line[120..] })
+                .trim()
+                .replace(',', "");
+            let addition_string = (if line.len() > 160 { &line[140..160] } else { "" })
+                .trim()
+                .replace(',', "");
             let deduct = match deduct_string.parse::<f64>() {
                 Ok(num) => num,
                 Err(_) => 0.0, // Default value on error
@@ -63,7 +70,6 @@ fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
             println!("deduct->{}", deduct_string);
             println!("add->{}", addition_string);
             println!("");
-            println!("{}.", &line[55..]);
             println!("");
             println!("================================================================");
             records.push(Record {
@@ -73,6 +79,7 @@ fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
                 description: item.to_string(),
                 addition: addition,
                 deduct: deduct,
+                org: line[55..].to_owned(),
             });
         }
         if line.contains("closing balance") {
@@ -106,4 +113,38 @@ fn main() {
     }
     println!("We now have {:#?} ", records);
     println!("We now have {} records", records.len());
+    let brams: Vec<&Record> = records
+        .iter()
+        .filter(|r| r.description == "BRAMHILL P&M")
+        .collect();
+    for bram in brams {
+        println!("Just brum {:?}", bram);
+    }
+    let mut filtered_records: Vec<&Record> = records
+        .iter()
+        .filter(|r| r.description.contains("TFR"))
+        .collect();
+
+    // filtered_records.sort_by(|a, b| a.date.partial_cmp(&b.date).unwrap());
+    filtered_records.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
+
+    let trans = filtered_records.clone();
+    // let trans: Vec<&Record> = filtered_records.sort_by(|a, b| a.date.partial_cmp(&b.date).unwrap());
+
+    // .sort_by(|a, b| a.id - b.id);
+    for tr in trans {
+        println!("{:?}", tr);
+    }
+
+    let mut frec: Vec<&Record> = records
+        .iter()
+        .filter(|r| r.filename.contains("f67a1c0-21f5-4a82-b46b-c1079e170d08"))
+        .collect();
+
+    frec.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
+
+    for tr in frec {
+        println!("{}", tr.org);
+        println!("{}", tr.addition);
+    }
 }
