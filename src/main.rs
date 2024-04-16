@@ -1,5 +1,9 @@
 use std::{ collections::HashSet, error::Error, fs, process::Command };
 
+use crate::html_graph::html_graph::generate;
+
+pub mod html_graph;
+
 fn command_line(pdf_path: &str) -> Result<Vec<String>, Box<dyn Error>> {
     // Run pdftotext command
     let output = Command::new("pdftotext").args(&[pdf_path, "-", "-layout"]).output()?;
@@ -25,6 +29,13 @@ struct Record {
     description: String,
     value: f64, // Use a suitable type for monetary values
     org: String,
+    full_date_string: String,
+}
+
+struct Data {
+    records: Vec<Record>,
+    items: HashSet<String>,
+    dates: HashSet<String>,
 }
 
 fn process_line(line: String, index: i32, filename: String) -> Record {
@@ -84,6 +95,7 @@ fn process_line(line: String, index: i32, filename: String) -> Record {
     println!("================================================================");
     Record {
         id: index,
+        full_date_string: "".to_string(),
         filename: filename.clone(),
         date: date.to_string(),
         description: item.to_string(),
@@ -92,15 +104,68 @@ fn process_line(line: String, index: i32, filename: String) -> Record {
     }
 }
 
-fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
+fn construct_full_date(mut rec: Record, statement_year: String) -> Record {
+    let months = [
+        "not Zero",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+    let month = rec.date[2..].trim();
+    let index = months
+        .iter()
+        .position(|&r| r == month)
+        .unwrap();
+    let mut month_string = if index > 9 { String::from("") } else { String::from("0") };
+    month_string.push_str(&index.to_string());
+    rec.full_date_string.push_str(&statement_year);
+    rec.full_date_string.push_str("-");
+
+    rec.full_date_string.push_str(&month_string);
+    rec.full_date_string.push_str("-");
+    rec.full_date_string.push_str(&rec.date[0..2]);
+    if rec.full_date_string.contains(" ") || rec.full_date_string.len() < 10 {
+        panic!("{} -- rec date wrong {:?}", statement_year, rec);
+    }
+    rec
+}
+
+fn process_lines(lines: Vec<String>, filename: String) -> Data {
     println!(" with {} lines", lines.len());
     let mut index = 1;
+    let mut index_Year = 1;
     let mut found_closing = false;
     let mut found_forward = false;
+    let mut statement_year = String::new();
 
-    let mut records: Vec<Record> = Vec::with_capacity(lines.len()); // Pre-allocate space
     let mut items: HashSet<String> = HashSet::new();
+    let mut dates: HashSet<String> = HashSet::new();
+    let mut records: Vec<Record> = Vec::with_capacity(lines.len()); // Pre-allocate space
     for line in lines {
+        if line.contains("Statement date") {
+            let start = &line.find("Statement date").unwrap() + "Statement date".len();
+            let end = start + 16;
+            let statement_date = if line.len() < end {
+                line[25..].trim()
+            } else {
+                line[25..end].trim()
+            };
+            println!("{} ", line);
+            println!("statement date {} ", statement_date);
+            statement_year = String::from("20");
+            statement_year.push_str(&statement_date[statement_date.len() - 2..]);
+            statement_year.push_str("-");
+            index_Year = records.len();
+        }
         let short = line.len() < 60;
         if line.contains("closing balance") {
             found_closing = true;
@@ -108,8 +173,15 @@ fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
         if found_forward && !found_closing && !short {
             // && index == 32 {
             let rec = process_line(line.clone(), index, filename.clone());
-            records.push(rec.clone());
-            items.insert(rec.description.clone());
+            let empty_year = statement_year.is_empty();
+            if !empty_year {
+                construct_full_date(rec.clone(), statement_year.to_string());
+                let date = &rec.full_date_string.clone();
+                dates.insert(date.to_string());
+            }
+            let desc = rec.clone().description;
+            records.push(rec);
+            items.insert(desc);
         }
 
         if line.contains("BROUGHT FORWARD") {
@@ -117,8 +189,15 @@ fn process_lines(lines: Vec<String>, filename: String) -> Vec<Record> {
         }
         index = index + 1;
     }
-    println!("{:?}", items);
-    return records;
+    for i in 0..index_Year as usize {
+        println!("{} {} {}", i, records.len(), index_Year);
+        records[i] = construct_full_date(records[i].clone(), statement_year.to_string());
+    }
+    return Data {
+        records: records,
+        items: items,
+        dates: dates,
+    };
 }
 
 fn main() {
@@ -127,6 +206,8 @@ fn main() {
     //    let pdf_path = "../Documents/coop/5bee1b4c-a758-4ed7-8a35-96858f398e06.pdf";
     let paths = fs::read_dir("../Documents/coop/").unwrap();
     let mut records: Vec<Record> = Vec::new();
+    let mut items: HashSet<String> = HashSet::new();
+    let mut dates: HashSet<String> = HashSet::new();
     for path in paths {
         let filename = path.unwrap();
         let mut path_name = "../Documents/coop/".to_owned();
@@ -135,8 +216,10 @@ fn main() {
             match command_line(&path_name) {
                 //match command_line(pdf_path) {
                 Ok(lines) => {
-                    let mut recs = process_lines(lines, path_name);
-                    records.append(&mut recs);
+                    let mut data = process_lines(lines, path_name);
+                    records.append(&mut data.records);
+                    items.extend(data.items);
+                    dates.extend(data.dates);
                 }
                 Err(err) => {
                     eprintln!("Error: pdftotext command failed {}", err);
@@ -144,50 +227,30 @@ fn main() {
             }
         }
     }
-    // println!("We now have {:#?} ", records);
+
+    // println!("{:?}", items);
+    let mut date_list: Vec<String> = dates.into_iter().collect();
+    date_list.sort_by(|a, b| a.partial_cmp(&b).unwrap());
+    println!("{:?}", date_list);
+
+    let mut item_list: Vec<String> = items.into_iter().collect();
+    item_list.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    println!("{:?}", item_list);
+
+    //    println!("We now have {:#?} ", records);
     println!("We now have {} records", records.len());
-    // let brams: Vec<&Record> = records
-    //     .iter()
-    //     .filter(|r| r.description == "BRAMHILL P&M")
-    //     .collect();
-    // for bram in brams {
-    //     println!("Just brum {:?}", bram);
-    // }
 
     let mut filtered_records: Vec<&Record> = records
         .iter()
         .filter(|r| r.description.contains("TFR"))
         .collect();
 
-    // // filtered_records.sort_by(|a, b| a.date.partial_cmp(&b.date).unwrap());
-    filtered_records.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
+    filtered_records.sort_by(|a, b| a.full_date_string.partial_cmp(&b.full_date_string).unwrap());
 
     let trans = filtered_records.clone();
-    // let trans: Vec<&Record> = filtered_records.sort_by(|a, b| a.date.partial_cmp(&b.date).unwrap());
-
-    // .sort_by(|a, b| a.id - b.id);
     for tr in trans {
-        println!("{}. {} {}  value {}", tr.id, tr.filename, tr.date, tr.value);
+        println!("{}. {} {}  value {}", tr.id, tr.filename, tr.full_date_string, tr.value);
     }
-
-    // let mut frec: Vec<&Record> = records
-    //     .iter()
-    //     .filter(|r| r.filename.contains("f67a1c0-21f5-4a82-b46b-c1079e170d08"))
-    //     .collect();
-
-    // frec.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
-
-    // for tr in frec {
-    // println!(
-    //     "5678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
-    // );
-    // println!(
-    //     "     6         7         8         9         0         1         2         3         4         5         6         7         8         9"
-    // );
-    // println!("{}", tr.org);
-    // println!("{} additon {}", tr.id, tr.addition);
-    // println!("**************************************");
-    // println!("");
-    //     println!("{:?}", tr);
-    // }
+    //html_graph::generate("what.html", "1,2,3,4,5");
+    generate("WHAT.html", "1,2,3,4,5");
 }
