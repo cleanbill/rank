@@ -10,7 +10,7 @@ fn command_line(pdf_path: &str) -> Result<Vec<String>, Box<dyn Error>> {
 
     // Convert output bytes to string
     let text = String::from_utf8_lossy(&output.stdout);
-    println!(" {} PDF to text conversion successful", pdf_path);
+    print!(" {} PDF to text conversion successful", pdf_path);
 
     // Extract lines of text and return as Vec<&str>
     let lines: Vec<String> = text
@@ -39,13 +39,13 @@ struct Data {
 }
 
 fn process_line(line: String, index: i32, filename: String) -> Record {
-    println!(
-        "4678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
-    );
-    println!(
-        "     6         7         8         9         0         1         2         3         4         5         6         7         8         9"
-    );
-    println!("{}.", &line[55..]);
+    // println!(
+    //     "4678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+    // );
+    // println!(
+    //     "     6         7         8         9         0         1         2         3         4         5         6         7         8         9"
+    // );
+    // println!("{}.", &line[55..]);
     let date = &line[55..70].trim();
     let item = &line[70..100].trim();
 
@@ -77,22 +77,22 @@ fn process_line(line: String, index: i32, filename: String) -> Record {
             Err(_) => 0.0, // Default value on error
         }
     };
-    println!("{}.", index);
-    println!("date->{}", date);
-    println!("item->{}", item);
-    println!("deduct->{}", deduct_string);
-    println!("add->{}", addition_string);
+    let value = if deduct > 0.0 { -deduct } else { addition };
+    // println!("{}.", index);
+    // println!("date->{}", date);
+    // println!("item->{}", item);
+    // println!("deduct->{}", deduct_string);
+    // println!("add->{}", addition_string);
+    // println!("value->{}", value);
+    // println!("");
+    // println!("");
+    // println!("================================================================");
     if deduct_string.len() == 0 && addition_string.len() == 0 {
         panic!("parse error this line has no movement?!!");
     }
     if deduct > 0.0 && addition > 0.0 {
         panic!("parse error this line has two movement?!!");
     }
-    let value = if deduct > 0.0 { -deduct } else { addition };
-    println!("value->{}", value);
-    println!("");
-    println!("");
-    println!("================================================================");
     Record {
         id: index,
         full_date_string: "".to_string(),
@@ -104,7 +104,7 @@ fn process_line(line: String, index: i32, filename: String) -> Record {
     }
 }
 
-fn construct_full_date(mut rec: Record, statement_year: String) -> Record {
+fn construct_full_date(mut rec: Record, statement_year: String, in_jan: bool) -> String {
     let months = [
         "not Zero",
         "January",
@@ -127,24 +127,30 @@ fn construct_full_date(mut rec: Record, statement_year: String) -> Record {
         .unwrap();
     let mut month_string = if index > 9 { String::from("") } else { String::from("0") };
     month_string.push_str(&index.to_string());
-    rec.full_date_string.push_str(&statement_year);
+    if in_jan && index == 12 {
+        let year: i32 = statement_year.parse().unwrap();
+        let last_year = year - 1;
+        rec.full_date_string.push_str(&last_year.to_string());
+    } else {
+        rec.full_date_string.push_str(&statement_year);
+    }
     rec.full_date_string.push_str("-");
-
     rec.full_date_string.push_str(&month_string);
     rec.full_date_string.push_str("-");
     rec.full_date_string.push_str(&rec.date[0..2]);
     if rec.full_date_string.contains(" ") || rec.full_date_string.len() < 10 {
         panic!("{} -- rec date wrong {:?}", statement_year, rec);
     }
-    rec
+    // println!("{} from to  {} using {} year", rec.date, rec.full_date_string, statement_year);
+    rec.full_date_string
 }
 
 fn process_lines(lines: Vec<String>, filename: String) -> Data {
     println!(" with {} lines", lines.len());
     let mut index = 1;
-    let mut index_Year = 1;
     let mut found_closing = false;
     let mut found_forward = false;
+    let mut in_jan = false;
     let mut statement_year = String::new();
 
     let mut items: HashSet<String> = HashSet::new();
@@ -159,12 +165,11 @@ fn process_lines(lines: Vec<String>, filename: String) -> Data {
             } else {
                 line[25..end].trim()
             };
-            println!("{} ", line);
-            println!("statement date {} ", statement_date);
+            in_jan = line.contains("January");
             statement_year = String::from("20");
             statement_year.push_str(&statement_date[statement_date.len() - 2..]);
-            statement_year.push_str("-");
-            index_Year = records.len();
+            // println!("{} ", line);
+            // println!("statement date {} and year {} ", statement_date, statement_year);
         }
         let short = line.len() < 60;
         if line.contains("closing balance") {
@@ -173,12 +178,13 @@ fn process_lines(lines: Vec<String>, filename: String) -> Data {
         if found_forward && !found_closing && !short {
             // && index == 32 {
             let rec = process_line(line.clone(), index, filename.clone());
-            let empty_year = statement_year.is_empty();
-            if !empty_year {
-                construct_full_date(rec.clone(), statement_year.to_string());
-                let date = &rec.full_date_string.clone();
-                dates.insert(date.to_string());
-            }
+            // maybe reimplement for speed?
+            // let empty_year = statement_year.is_empty();
+            // if !empty_year {
+            //     construct_full_date(rec.clone(), statement_year.to_string());
+            //     let date = &rec.full_date_string.clone();
+            //     dates.insert(date.to_string());
+            // }
             let desc = rec.clone().description;
             records.push(rec);
             items.insert(desc);
@@ -189,9 +195,14 @@ fn process_lines(lines: Vec<String>, filename: String) -> Data {
         }
         index = index + 1;
     }
-    for i in 0..index_Year as usize {
-        println!("{} {} {}", i, records.len(), index_Year);
-        records[i] = construct_full_date(records[i].clone(), statement_year.to_string());
+    // for i in 0..index_Year as usize {
+    for i in 0..records.len() {
+        records[i].full_date_string = construct_full_date(
+            records[i].clone(),
+            statement_year.to_string(),
+            in_jan
+        );
+        dates.insert(records[i].full_date_string.to_string());
     }
     return Data {
         records: records,
@@ -228,29 +239,30 @@ fn main() {
         }
     }
 
-    // println!("{:?}", items);
     let mut date_list: Vec<String> = dates.into_iter().collect();
     date_list.sort_by(|a, b| a.partial_cmp(&b).unwrap());
-    println!("{:?}", date_list);
+
+    let mut data = vec![0.0; date_list.len()];
 
     let mut item_list: Vec<String> = items.into_iter().collect();
     item_list.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    println!("{:?}", item_list);
-
-    //    println!("We now have {:#?} ", records);
-    println!("We now have {} records", records.len());
 
     let mut filtered_records: Vec<&Record> = records
         .iter()
         .filter(|r| r.description.contains("TFR"))
+        // .filter(|r| r.description.contains("GOCARDLESS"))
         .collect();
 
-    filtered_records.sort_by(|a, b| a.full_date_string.partial_cmp(&b.full_date_string).unwrap());
-
-    let trans = filtered_records.clone();
-    for tr in trans {
-        println!("{}. {} {}  value {}", tr.id, tr.filename, tr.full_date_string, tr.value);
+    for record in filtered_records {
+        let pos = date_list
+            .iter()
+            .position(|s| s == &record.full_date_string)
+            .unwrap();
+        data[pos] = record.value;
     }
-    //html_graph::generate("what.html", "1,2,3,4,5");
-    generate("WHAT.html", "1,2,3,4,5");
+
+    println!("We now have {} records", records.len());
+    println!("data {:?}", data);
+    println!("labels {:?}", date_list);
+    generate("WHAT.html", data, date_list);
 }

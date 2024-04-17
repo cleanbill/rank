@@ -48,13 +48,19 @@ pub mod html_graph {
         }
     }
 
-    fn write_data(mut file: &fs::File, output_filename: &str, string_array: String) {
+    fn write_data(
+        mut file: &fs::File,
+        output_filename: &str,
+        numbers: Vec<f64>,
+        //string_array: String,
+        labels: Vec<String>
+    ) {
         // let string_array = setup_args();
 
-        let numbers: Vec<f64> = string_array
-            .split(',')
-            .map(|s| s.parse::<f64>().expect("Cannot parse numbers"))
-            .collect();
+        // let numbers: Vec<f64> = string_array
+        //     .split(',')
+        //     .map(|s| s.parse::<f64>().expect("Cannot parse numbers"))
+        //     .collect();
 
         for x in numbers.iter() {
             let write_attempt = writeln!(file, "{},", x);
@@ -69,8 +75,9 @@ pub mod html_graph {
         }
 
         let mut index = 1;
-        for _x in numbers.iter() {
-            let write_attempt = write!(file, "{},", index);
+        // for _x in numbers.iter() {
+        for label in labels {
+            let write_attempt = write!(file, "\"{}\",", label);
             if write_attempt.is_err() {
                 panic!("cannot write {} index {}", output_filename, index);
             }
@@ -88,7 +95,7 @@ pub mod html_graph {
         datasets: [
 
             {{
-                label: 'Boozer',
+                label: 'Rank',
                 data: NUMBER_CFG,
             }}
         ]
@@ -109,13 +116,13 @@ medElement.innerHTML = 'Median is ' + median(NUMBER_CFG);
         }
     }
 
-    pub fn generate(output_filename: &str, string_array: &str) {
+    pub fn generate(output_filename: &str, numbers: Vec<f64>, labels: Vec<String>) {
         //let output_filename = "line_graph.html";
 
         let file = fs::File::create(output_filename).unwrap();
 
         write_header(&file, &output_filename);
-        write_data(&file, &output_filename, string_array.to_string());
+        write_data(&file, &output_filename, numbers, labels);
         write_footer(&file, &output_filename);
     }
 }
