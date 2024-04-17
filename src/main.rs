@@ -32,6 +32,13 @@ struct Record {
     full_date_string: String,
 }
 
+#[derive(Debug)]
+#[derive(Clone)]
+pub struct Number_Set {
+    name: String,
+    numbers: Vec<f64>,
+}
+
 struct Data {
     records: Vec<Record>,
     items: HashSet<String>,
@@ -262,7 +269,13 @@ fn main() {
     }
 
     println!("We now have {} records", records.len());
-    println!("data {:?}", data);
+    let mut numbers_sets: Vec<Number_Set> = Vec::new();
+    let number_set: Number_Set = Number_Set {
+        name: "Transfers".to_string(),
+        numbers: data,
+    };
+    numbers_sets.push(number_set.clone());
+    println!("data {:?}", numbers_sets);
     println!("labels {:?}", date_list);
-    generate("WHAT.html", data, date_list);
+    generate("WHAT.html", numbers_sets, date_list);
 }

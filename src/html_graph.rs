@@ -4,6 +4,8 @@ pub mod html_graph {
     use std::fs;
     use std::io::Write;
 
+    use crate::Number_Set;
+
     fn setup_args() -> String {
         let args: Vec<String> = env::args().collect();
 
@@ -51,7 +53,7 @@ pub mod html_graph {
     fn write_data(
         mut file: &fs::File,
         output_filename: &str,
-        numbers: Vec<f64>,
+        numbers_sets: Vec<Number_Set>,
         //string_array: String,
         labels: Vec<String>
     ) {
@@ -62,13 +64,15 @@ pub mod html_graph {
         //     .map(|s| s.parse::<f64>().expect("Cannot parse numbers"))
         //     .collect();
 
-        for x in numbers.iter() {
-            let write_attempt = writeln!(file, "{},", x);
-            if write_attempt.is_err() {
-                panic!("cannot write {} data {}", output_filename, x);
+        for number_set in numbers_sets {
+            let numbers = number_set.numbers;
+            for x in numbers.iter() {
+                let write_attempt = writeln!(file, "{},", x);
+                if write_attempt.is_err() {
+                    panic!("cannot write {} data {}", output_filename, x);
+                }
             }
         }
-
         let const_write = writeln!(file, "];\n\nconst labels = [");
         if const_write.is_err() {
             panic!("cannot write {} const ", output_filename);
@@ -97,7 +101,12 @@ pub mod html_graph {
             {{
                 label: 'Rank',
                 data: NUMBER_CFG,
-            }}
+            }},
+            {{
+                label: 'Bank',
+                data: NUMBER_CFG,
+            }},
+
         ]
     }}
 }});
@@ -116,7 +125,7 @@ medElement.innerHTML = 'Median is ' + median(NUMBER_CFG);
         }
     }
 
-    pub fn generate(output_filename: &str, numbers: Vec<f64>, labels: Vec<String>) {
+    pub fn generate(output_filename: &str, numbers: Vec<Number_Set>, labels: Vec<String>) {
         //let output_filename = "line_graph.html";
 
         let file = fs::File::create(output_filename).unwrap();
